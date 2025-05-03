@@ -1,36 +1,21 @@
-# lambda/index.py
 import json
 import os
 import urllib.request
 import urllib.error
 import re
 
-
-FASTAPI_ENDPOINT = os.environ.get("FASTAPI_ENDPOINT", "https://617f-34-124-225-91.ngrok-free.app/generate")
-
-# Lambda コンテキストからリージョンを抽出する関数
+# Lambda コンテキストからリージョンを抽出する関数（今回は使用しないが、コードの互換性のために残す）
 def extract_region_from_arn(arn):
-    # ARN 形式: arn:aws:lambda:region:account-id:function:function-name
     match = re.search('arn:aws:lambda:([^:]+):', arn)
     if match:
         return match.group(1)
-    return "us-east-1"  # デフォルト値
+    return "us-east-1"
 
-# グローバル変数としてクライアントを初期化（初期値）
-# bedrock_client = None
-
-# # モデルID
-# MODEL_ID = os.environ.get("MODEL_ID", "us.amazon.nova-lite-v1:0")
+# FastAPIエンドポイントのURL（環境変数から取得）
+API_ENDPOINT = os.environ.get("API_ENDPOINT", "https://617f-34-124-225-91.ngrok-free.app/generate")
 
 def lambda_handler(event, context):
     try:
-        # コンテキストから実行リージョンを取得し、クライアントを初期化
-        # global bedrock_client
-        # if bedrock_client is None:
-        #     region = extract_region_from_arn(context.invoked_function_arn)
-        #     bedrock_client = boto3.client('bedrock-runtime', region_name=region)
-        #     print(f"Initialized Bedrock client in region: {region}")
-        
         print("Received event:", json.dumps(event))
         
         # Cognitoで認証されたユーザー情報を取得
@@ -45,7 +30,6 @@ def lambda_handler(event, context):
         conversation_history = body.get('conversationHistory', [])
         
         print("Processing message:", message)
-        # print("Using model:", MODEL_ID)
         
         # 会話履歴を使用
         messages = conversation_history.copy()
@@ -56,34 +40,22 @@ def lambda_handler(event, context):
             "content": message
         })
         
-        # fastapi用のリクエストペイロードを構築
-        # 会話履歴を含める
-        fastapi_messages = []
-        for msg in messages:
-            if msg["role"] == "user":
-                fastapi_messages.append({
-                    "role": "user",
-                    "content": [{"text": msg["content"]}]
-                })
-            # elif msg["role"] == "assistant":
-            #     bedrock_messages.append({
-            #         "role": "assistant", 
-            #         "content": [{"text": msg["content"]}]
-            #     })
-        
-       
+        # FastAPI用のリクエストペイロードを構築
+        # SimpleGenerationRequest スキーマに適合
+        user_message = messages[-1]["content"]  # 最後のユーザーメッセージを取得
         request_payload = {
-            "messages": fastapi_messages,
-            "maxTokens": 512,
+            "prompt": user_message,
+            "max_new_tokens": 512,
+            "do_sample": True,  # サンプリングを有効化（仮定）
             "temperature": 0.7,
-            "top_p": 0.9,    
+            "top_p": 0.9
         }
         
         print("Calling FastAPI endpoint with payload:", json.dumps(request_payload))
         
         # FastAPIエンドポイントにPOSTリクエストを送信
         req = urllib.request.Request(
-            FASTAPI_ENDPOINT,
+            API_ENDPOINT,
             data=json.dumps(request_payload).encode('utf-8'),
             headers={'Content-Type': 'application/json'},
             method='POST'
@@ -122,6 +94,7 @@ def lambda_handler(event, context):
                         "conversationHistory": messages
                     })
                 }
+                
         except urllib.error.HTTPError as e:
             error_message = f"HTTP Error {e.code}: {e.reason}"
             print("HTTP Error:", error_message)
@@ -130,7 +103,7 @@ def lambda_handler(event, context):
             error_message = f"URL Error: {str(e.reason)}"
             print("URL Error:", error_message)
             raise Exception(error_message)
-        
+            
     except Exception as error:
         print("Error:", str(error))
         
