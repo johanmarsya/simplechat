@@ -6,7 +6,7 @@ import urllib.error
 import re
 
 
-FASTAPI_ENDPOINT = os.environ.get("FASTAPI_ENDPOINT", "https://617f-34-124-225-91.ngrok-free.app")
+FASTAPI_ENDPOINT = os.environ.get("FASTAPI_ENDPOINT", "https://617f-34-124-225-91.ngrok-free.app/generate")
 
 # Lambda コンテキストからリージョンを抽出する関数
 def extract_region_from_arn(arn):
